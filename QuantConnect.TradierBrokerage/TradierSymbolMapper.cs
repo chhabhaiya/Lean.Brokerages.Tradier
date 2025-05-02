@@ -30,7 +30,8 @@ namespace QuantConnect.Brokerages.Tradier
         public string GetBrokerageSymbol(Symbol symbol)
         {
             return symbol.SecurityType == SecurityType.Option
-                ? symbol.Value.Replace(" ", "")
+                //? symbol.Value.Replace(" ", "")
+                ? ConvertOptionSymbol(symbol.Value, symbol)
                 : symbol.Value;
         }
 
@@ -71,6 +72,12 @@ namespace QuantConnect.Brokerages.Tradier
                 var underlying = brokerageSymbol.Substring(0, brokerageSymbol.Length - 15);
                 var ticker = underlying.PadRight(6, ' ') + brokerageSymbol.Substring(underlying.Length);
                 symbol = SymbolRepresentation.ParseOptionTickerOSI(ticker);
+
+                if (symbol.SecurityType.IsOption())
+                {
+                    symbol = QuantConnect.Symbol.CreateOption(symbol.Underlying, symbol.ID.Market, symbol.ID.OptionStyle,
+                        symbol.ID.OptionRight, symbol.ID.StrikePrice, symbol.ID.Date, OptionAlias(symbol.Value, symbol));
+                }
             }
             else
             {
@@ -78,6 +85,61 @@ namespace QuantConnect.Brokerages.Tradier
             }
 
             return symbol;
+        }
+
+        public static string OptionAlias(string inputSymbol, Symbol symbol)
+        {
+            // Remove extra spaces and split into parts
+            inputSymbol = inputSymbol.Trim();
+            string underlying = inputSymbol.Substring(0, inputSymbol.IndexOf(' ')).Trim();
+            string details = inputSymbol.Substring(inputSymbol.IndexOf(' ')).Trim(); // Get the rest (date, type, strike)
+
+            // Extract date and convert to readable format
+            string strikePrice = details.Substring(7); // Strike price part
+
+            // Parse the date
+            string formattedDate = symbol.ID.Date.ToString("ddMMMyy", System.Globalization.CultureInfo.InvariantCulture).ToUpper(); // e.g., 20SEP24 or 04OCT26
+
+            // Specially format strike price to include a decimal (always with three decimal places)
+            string formattedStrikePrice = (Convert.ToDecimal(strikePrice) / 1000).ToString("F3");
+
+            // Determine the option type suffix
+            string optionSuffix = symbol.ID.OptionRight == OptionRight.Call ? "CE" : "PE";
+
+            // Build the final formatted string
+            string result = $"{underlying}{formattedDate}{formattedStrikePrice}{optionSuffix}";
+
+            return result;
+        }
+
+        public static string ConvertOptionSymbol(string inputSymbol, Symbol symbol)
+        {
+            // Extract the underlying symbol (e.g., "AAPL", "MSFT")
+            //string underlying = inputSymbol.Substring(0, inputSymbol.IndexOfAny("0123456789".ToCharArray()));
+            string underlying = symbol.Underlying.Value;
+
+            // Extract the date part (e.g., "27SEP24")
+            string datePart = inputSymbol.Substring(underlying.Length, 7);
+
+            // Parse the date (e.g., "27SEP24" → "240927")
+            string formattedDate = symbol.ID.Date.ToString("yyMMdd"); // Convert to YYMMDD format
+
+            // Extract the strike price and option type (e.g., "305.500CE", "135.000PE")
+            string rest = inputSymbol.Substring(underlying.Length + 7); // Extract strike price and type
+
+            // Split the rest into strike price and option type (e.g., "305.500", "CE")
+            string strikePricePart = rest.Substring(0, rest.Length - 2); // Strike price is the rest except the last 2 chars
+
+            // Convert strike price to 6 digits without decimal (e.g., "305.500" → "0030550")
+            string formattedStrikePrice = (Convert.ToDecimal(strikePricePart) * 1000).ToString("00000000");
+
+            // Convert option type (e.g., "CE" → "C" or "PE" → "P")
+            string optionSuffix = symbol.ID.OptionRight == OptionRight.Call ? "C" : "P";
+
+            // Build the final formatted string
+            string result = $"{underlying}{formattedDate}{optionSuffix}{formattedStrikePrice}";
+
+            return result;
         }
     }
 }
