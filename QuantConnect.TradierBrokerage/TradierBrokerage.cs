@@ -1552,7 +1552,7 @@ Interval	Data Available (Open)	Data Available (All)
             var symbol = _symbolMapper.GetLeanSymbol(position.Symbol);
 
             var averagePrice = position.CostBasis / position.Quantity;
-            if (symbol.SecurityType == SecurityType.Option)
+            if (symbol.SecurityType.IsOption())
             {
                 var multiplier = _symbolPropertiesDatabase.GetSymbolProperties(
                         symbol.ID.Market,
@@ -1587,16 +1587,16 @@ Interval	Data Available (Open)	Data Available (All)
             return position switch
             {
                 // Increasing existing long position or opening new long position from zero
-                OrderPosition.BuyToOpen => securityType == SecurityType.Option ? TradierOrderDirection.BuyToOpen : TradierOrderDirection.Buy,
+                OrderPosition.BuyToOpen => securityType.IsOption() ? TradierOrderDirection.BuyToOpen : TradierOrderDirection.Buy,
 
                 // Decreasing existing short position or opening new short position from zero
-                OrderPosition.SellToOpen => securityType == SecurityType.Option ? TradierOrderDirection.SellToOpen : TradierOrderDirection.SellShort,
+                OrderPosition.SellToOpen => securityType.IsOption() ? TradierOrderDirection.SellToOpen : TradierOrderDirection.SellShort,
 
                 // Buying from an existing short position (reducing, closing or flipping)
-                OrderPosition.BuyToClose => securityType == SecurityType.Option ? TradierOrderDirection.BuyToClose : TradierOrderDirection.BuyToCover,
+                OrderPosition.BuyToClose => securityType.IsOption() ? TradierOrderDirection.BuyToClose : TradierOrderDirection.BuyToCover,
 
                 // Selling from an existing long position (reducing, closing or flipping)
-                OrderPosition.SellToClose => securityType == SecurityType.Option ? TradierOrderDirection.SellToClose : TradierOrderDirection.Sell,
+                OrderPosition.SellToClose => securityType.IsOption() ? TradierOrderDirection.SellToClose : TradierOrderDirection.Sell,
 
                 // This should never happen
                 _ => TradierOrderDirection.None
@@ -1656,6 +1656,7 @@ Interval	Data Available (Open)	Data Available (All)
                     return TradierOrderClass.Equity;
 
                 case SecurityType.Option:
+                case SecurityType.IndexOption:
                     return TradierOrderClass.Option;
 
                 default:
@@ -1861,7 +1862,7 @@ Interval	Data Available (Open)	Data Available (All)
                 QCOrder = order;
                 Classification = classification;
 
-                if (order.SecurityType == SecurityType.Option)
+                if (order.SecurityType.IsOption())
                 {
                     OptionSymbol = symbolMapper.GetBrokerageSymbol(order.Symbol);
                     Symbol = order.Symbol.Underlying.Value;

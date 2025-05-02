@@ -1,19 +1,20 @@
 ﻿/*
- * QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
- * Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+* QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
+* Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
 */
 
 using System;
+using System.Collections.Generic;
 
 namespace QuantConnect.Brokerages.Tradier
 {
@@ -29,7 +30,7 @@ namespace QuantConnect.Brokerages.Tradier
         /// <returns>The Tradier symbol</returns>
         public string GetBrokerageSymbol(Symbol symbol)
         {
-            return symbol.SecurityType == SecurityType.Option
+            return symbol.SecurityType.IsOption()
                 //? symbol.Value.Replace(" ", "")
                 ? ConvertOptionSymbol(symbol.Value, symbol)
                 : symbol.Value;
@@ -71,17 +72,38 @@ namespace QuantConnect.Brokerages.Tradier
                 // convert the Tradier option symbol to OSI format
                 var underlying = brokerageSymbol.Substring(0, brokerageSymbol.Length - 15);
                 var ticker = underlying.PadRight(6, ' ') + brokerageSymbol.Substring(underlying.Length);
-                symbol = SymbolRepresentation.ParseOptionTickerOSI(ticker);
+                symbol = SymbolRepresentation.ParseOptionTickerOSI(ticker, IndexOptionMapping.ContainsKey(underlying) ? SecurityType.IndexOption : SecurityType.Option);
 
-                if (symbol.SecurityType.IsOption())
+                if (symbol.SecurityType == SecurityType.Option)
                 {
                     symbol = QuantConnect.Symbol.CreateOption(symbol.Underlying, symbol.ID.Market, symbol.ID.OptionStyle,
                         symbol.ID.OptionRight, symbol.ID.StrikePrice, symbol.ID.Date, OptionAlias(symbol.Value, symbol));
                 }
+                else if (symbol.SecurityType == SecurityType.IndexOption)
+                {
+                    string symbolAlias = OptionAlias(symbol.Value, symbol);
+
+                    var indSym = QuantConnect.Symbol.Create(symbol.Underlying.Value, SecurityType.Index, symbol.ID.Market);
+
+                    var optSymTicker = symbol.Canonical != null ? symbol.Canonical.Value.Replace("?", "").Replace("/", "") : symbol.Underlying.Value;
+
+                    symbol = QuantConnect.Symbol.CreateOption(indSym, optSymTicker, symbol.ID.Market, symbol.ID.OptionStyle,
+                        symbol.ID.OptionRight, symbol.ID.StrikePrice, symbol.ID.Date, symbolAlias);
+                }
             }
             else
             {
-                symbol = Symbol.Create(brokerageSymbol, SecurityType.Equity, Market.USA);
+                // Check for Index symbol
+                if (IndexOptionMapping.ContainsKey(brokerageSymbol))
+                {
+                    // This is the rare case, but possible
+                    // Create Index
+                    symbol = Symbol.Create(IndexOptionMapping[brokerageSymbol], SecurityType.Index, Market.USA);
+                }
+                else
+                {
+                    symbol = Symbol.Create(brokerageSymbol, SecurityType.Equity, Market.USA);
+                }
             }
 
             return symbol;
@@ -114,9 +136,15 @@ namespace QuantConnect.Brokerages.Tradier
 
         public static string ConvertOptionSymbol(string inputSymbol, Symbol symbol)
         {
+            if (inputSymbol.Length < 15)
+            {
+                // These are the UL IndexOptions
+                return symbol.Value;
+            }
+
             // Extract the underlying symbol (e.g., "AAPL", "MSFT")
             //string underlying = inputSymbol.Substring(0, inputSymbol.IndexOfAny("0123456789".ToCharArray()));
-            string underlying = symbol.Underlying.Value;
+            string underlying = symbol.Canonical != null ? symbol.Canonical.Value.Replace("?", "").Replace("/", "") : symbol.Underlying.Value;
 
             // Extract the date part (e.g., "27SEP24")
             string datePart = inputSymbol.Substring(underlying.Length, 7);
@@ -141,5 +169,15 @@ namespace QuantConnect.Brokerages.Tradier
 
             return result;
         }
+
+        /// <summary>
+        /// Dictionary containing Index Option Symbol mapping
+        /// </summary>
+        public Dictionary<string, string> IndexOptionMapping = new()
+        {
+            { "SPX", "SPX" },
+            { "SPXW", "SPX" },
+            { "XSP", "XSP" }
+        };
     }
 }
