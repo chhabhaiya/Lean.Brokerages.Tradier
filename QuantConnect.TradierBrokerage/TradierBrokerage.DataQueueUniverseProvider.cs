@@ -36,7 +36,7 @@ namespace QuantConnect.Brokerages.Tradier
         /// <returns>Enumerable of Symbols, that are associated with the provided Symbol</returns>
         public IEnumerable<Symbol> LookupSymbols(Symbol symbol, bool includeExpired, string securityCurrency = null)
         {
-            if (symbol.SecurityType.IsOption())
+            if (symbol.SecurityType != SecurityType.Option && symbol.SecurityType != SecurityType.IndexOption)
             {
                 return Enumerable.Empty<Symbol>();
             }
@@ -48,6 +48,7 @@ namespace QuantConnect.Brokerages.Tradier
             var symbols = new List<Symbol>();
 
             var today = DateTime.UtcNow.ConvertFromUtc(TimeZones.NewYork).Date;
+            // To fetch weekly data of SPX, VIXW, etc we need to use symbol instead symbol.underlying
             symbols.AddRange(_algorithm.OptionChainProvider.GetOptionContractList(symbol, today));
 
             // Try to remove options contracts that have expired

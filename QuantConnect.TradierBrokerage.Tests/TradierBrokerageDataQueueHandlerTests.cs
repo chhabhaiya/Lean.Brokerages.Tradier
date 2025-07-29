@@ -34,6 +34,7 @@ namespace QuantConnect.Tests.Brokerages.Tradier
                 {
                     // valid parameters, for example
                     new TestCaseData(Symbols.AAPL, Resolution.Tick, false),
+                    new TestCaseData(Symbols.SPX, Resolution.Tick, false),
                 };
             }
         }

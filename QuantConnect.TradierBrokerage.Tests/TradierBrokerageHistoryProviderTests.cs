@@ -69,6 +69,8 @@ namespace QuantConnect.Tests.Brokerages.Tradier
                     new TestCaseData(Symbols.AAPL, Resolution.Daily, false, false, 60, TickType.Trade, -1),
                     new TestCaseData(Symbols.AAPL, Resolution.Daily, false, false, 6, TickType.Trade, -1),
 
+                    new TestCaseData(Symbols.SPX, Resolution.Tick, false, false, 60 * 6 * 2, TickType.Trade, -1),
+
                     // invalid tick type, null result
                     new TestCaseData(Symbols.AAPL, Resolution.Minute, true, false, 0, TickType.Quote, -1),
                     new TestCaseData(Symbols.AAPL, Resolution.Minute, true, false, 0, TickType.OpenInterest, -1),
@@ -78,6 +80,43 @@ namespace QuantConnect.Tests.Brokerages.Tradier
 
                     // invalid security type, null result
                     new TestCaseData(Symbols.EURUSD, Resolution.Daily, true, false, 0, TickType.Trade, -1)
+                };
+            }
+        }
+
+        private static TestCaseData[] OptionTestParameters
+        {
+            get
+            {
+                return new[]
+                {
+                    // SPY
+                    new TestCaseData(Symbols.SPY, Resolution.Daily, 20),
+                    new TestCaseData(Symbols.SPY, Resolution.Hour, 30),
+                    new TestCaseData(Symbols.SPY, Resolution.Minute, 60 * 10),
+                    new TestCaseData(Symbols.SPY, Resolution.Second, 60 * 10 * 5),
+                    new TestCaseData(Symbols.SPY, Resolution.Tick, 30),
+
+                    // AAPL
+                    new TestCaseData(Symbols.AAPL, Resolution.Daily, 20),
+                    new TestCaseData(Symbols.AAPL, Resolution.Hour, 30),
+                    new TestCaseData(Symbols.AAPL, Resolution.Minute, 60 * 10),
+                    new TestCaseData(Symbols.AAPL, Resolution.Second, 60 * 10 * 5),
+                    new TestCaseData(Symbols.AAPL, Resolution.Tick, 30),
+
+                    // SPX
+                    new TestCaseData(Symbols.SPX, Resolution.Daily, 20),
+                    new TestCaseData(Symbols.SPX, Resolution.Hour, 30),
+                    new TestCaseData(Symbols.SPX, Resolution.Minute, 60 * 10),
+                    new TestCaseData(Symbols.SPX, Resolution.Second, 60 * 10 * 5),
+                    new TestCaseData(Symbols.SPX, Resolution.Tick, 30),
+
+                    // XSP
+                    new TestCaseData(Symbol.Create("XSP", SecurityType.Index, Market.USA), Resolution.Daily, 20),
+                    new TestCaseData(Symbol.Create("XSP", SecurityType.Index, Market.USA), Resolution.Hour, 30),
+                    new TestCaseData(Symbol.Create("XSP", SecurityType.Index, Market.USA), Resolution.Minute, 60 * 10),
+                    new TestCaseData(Symbol.Create("XSP", SecurityType.Index, Market.USA), Resolution.Second, 60 * 10 * 5),
+                    new TestCaseData(Symbol.Create("XSP", SecurityType.Index, Market.USA), Resolution.Tick, 30),
                 };
             }
         }
@@ -146,26 +185,27 @@ namespace QuantConnect.Tests.Brokerages.Tradier
             }
         }
 
-        [TestCase(Resolution.Daily, 20)]
-        [TestCase(Resolution.Hour, 30)]
-        [TestCase(Resolution.Minute, 60 * 10)]
-        [TestCase(Resolution.Second, 60 * 10 * 5)]
-        [TestCase(Resolution.Tick, 30)]
-        public void GetsOptionHistory(Resolution resolution, int expectedCount)
+        [Test, TestCaseSource(nameof(OptionTestParameters))]
+        public void GetsOptionHistory(Symbol symbol, Resolution resolution, int expectedCount)
         {
             if (_useSandbox && (resolution == Resolution.Tick || resolution == Resolution.Second))
             {
                 // sandbox doesn't allow tick data, we generate second resolution from tick
                 return;
             }
-            var spy = Symbol.Create("SPY", SecurityType.Equity, Market.USA);
-            var mhdb = MarketHoursDatabase.FromDataFolder().GetEntry(spy.ID.Market, spy, spy.SecurityType);
+            
+            var mhdb = MarketHoursDatabase.FromDataFolder().GetEntry(symbol.ID.Market, symbol, symbol.SecurityType);
 
             GetStartEndTime(mhdb, resolution, expectedCount, false, out var startUtc, out var endUtc);
 
-            var chain = _chainProvider.GetOptionContractList(spy, startUtc.ConvertFromUtc(mhdb.ExchangeHours.TimeZone)).ToList();
+            var chain = _chainProvider.GetOptionContractList(symbol, startUtc.ConvertFromUtc(mhdb.ExchangeHours.TimeZone)).ToList();
 
-            var quote = _brokerage.GetQuotes(new() { "SPY" }).First().Last;
+            var quote = _brokerage.GetQuotes(new() { symbol.Value })?.FirstOrDefault()?.Last ?? 0;
+            if (quote == 0)
+            {
+                // didn't receive proper quote price
+                return;
+            }
             var option = chain.Where(x => x.ID.OptionRight == OptionRight.Call)
                 // drop weeklies
                 .Where(x => OptionSymbol.IsStandard(x))
@@ -229,7 +269,7 @@ namespace QuantConnect.Tests.Brokerages.Tradier
 
                 if (previous != null)
                 {
-                    if(request.Resolution == Resolution.Tick)
+                    if (request.Resolution == Resolution.Tick)
                     {
                         Assert.IsTrue(previous.EndTime <= data.EndTime);
                     }

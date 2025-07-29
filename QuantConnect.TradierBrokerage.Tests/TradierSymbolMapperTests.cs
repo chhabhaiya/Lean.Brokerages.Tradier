@@ -34,6 +34,26 @@ namespace QuantConnect.Tests.Brokerages.Tradier
             leanSymbol = mapper.GetLeanSymbol("SPY210319C00410000");
             expected = Symbol.CreateOption("SPY", Market.USA, OptionStyle.American, OptionRight.Call, 410m, new DateTime(2021, 3, 19));
             Assert.AreEqual(expected, leanSymbol);
+
+            leanSymbol = mapper.GetLeanSymbol("QQQ250725P00350000");
+            expected = Symbol.CreateOption("QQQ", Market.USA, SecurityType.Option.DefaultOptionStyle(), OptionRight.Put, 350m, new DateTime(2025, 7, 25));
+            Assert.AreEqual(expected, leanSymbol);
+
+            leanSymbol = mapper.GetLeanSymbol("SPX");
+            Assert.AreEqual(Symbols.SPX, leanSymbol);
+
+            leanSymbol = mapper.GetLeanSymbol("SPXW250725C05900000");
+            expected = Symbol.CreateOption(Symbols.SPX, "SPXW", Market.USA, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 5900m, new DateTime(2025, 7, 25));
+            Assert.AreEqual(expected, leanSymbol);
+
+            leanSymbol = mapper.GetLeanSymbol("XSP");
+            expected = Symbol.Create("XSP", SecurityType.Index, Market.USA);
+            Assert.AreEqual(expected, leanSymbol);
+
+            leanSymbol = mapper.GetLeanSymbol("XSP250725C00480000");
+            var idxSymbol = Symbol.Create("XSP", SecurityType.Index, Market.USA);
+            expected = Symbol.CreateOption(idxSymbol, "XSP", Market.USA, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 480m, new DateTime(2025, 7, 25));
+            Assert.AreEqual(expected, leanSymbol);
         }
 
         [Test]
@@ -48,6 +68,25 @@ namespace QuantConnect.Tests.Brokerages.Tradier
             var optionSymbol = Symbol.CreateOption("SPY", Market.USA, OptionStyle.American, OptionRight.Call, 410m, new DateTime(2021, 3, 19));
             brokerageSymbol = mapper.GetBrokerageSymbol(optionSymbol);
             Assert.AreEqual("SPY210319C00410000", brokerageSymbol);
+
+            optionSymbol = Symbol.CreateOption("QQQ", Market.USA, SecurityType.Option.DefaultOptionStyle(), OptionRight.Put, 350m, new DateTime(2025, 7, 25));
+            brokerageSymbol = mapper.GetBrokerageSymbol(optionSymbol);
+            Assert.AreEqual("QQQ250725P00350000", brokerageSymbol);
+
+            brokerageSymbol = mapper.GetBrokerageSymbol(Symbols.SPX);
+            Assert.AreEqual("SPX", brokerageSymbol);
+
+            optionSymbol = Symbol.CreateOption(Symbols.SPX, "SPXW", Market.USA, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 5900m, new DateTime(2025, 7, 25));
+            brokerageSymbol = mapper.GetBrokerageSymbol(optionSymbol);
+            Assert.AreEqual("SPXW250725C05900000", brokerageSymbol);
+
+            var idxSymbol = Symbol.Create("XSP", SecurityType.Index, Market.USA);
+            brokerageSymbol = mapper.GetBrokerageSymbol(idxSymbol);
+            Assert.AreEqual("XSP", brokerageSymbol);
+
+            optionSymbol = Symbol.CreateOption(idxSymbol, "XSP", Market.USA, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 480m, new DateTime(2025, 7, 25));
+            brokerageSymbol = mapper.GetBrokerageSymbol(optionSymbol);
+            Assert.AreEqual("XSP250725C00480000", brokerageSymbol);
         }
     }
 }

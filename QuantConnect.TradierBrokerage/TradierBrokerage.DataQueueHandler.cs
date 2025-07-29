@@ -21,7 +21,6 @@ using QuantConnect.Configuration;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Packets;
-using QuantConnect.Securities;
 using QuantConnect.Util;
 using RestSharp;
 using System;
@@ -104,7 +103,8 @@ namespace QuantConnect.Brokerages.Tradier
 
         private bool CanSubscribe(Symbol symbol)
         {
-            return (symbol.ID.SecurityType == SecurityType.Equity || symbol.ID.SecurityType == SecurityType.Index || symbol.ID.SecurityType.IsOption())
+            return (symbol.ID.SecurityType == SecurityType.Equity || symbol.ID.SecurityType == SecurityType.Option
+                || symbol.ID.SecurityType == SecurityType.Index || symbol.ID.SecurityType == SecurityType.IndexOption)
                 && !symbol.Value.Contains("-UNIVERSE-")
                 // continuous futures and canonical symbols not supported
                 && !symbol.IsCanonical();
