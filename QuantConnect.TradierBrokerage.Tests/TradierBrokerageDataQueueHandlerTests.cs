@@ -35,7 +35,13 @@ namespace QuantConnect.Tests.Brokerages.Tradier
                     // valid parameters, for example
                     new TestCaseData(Symbols.AAPL, Resolution.Tick, false),
                     new TestCaseData(Symbols.SPX, Resolution.Tick, false),
-                };
+
+                    new TestCaseData(Symbol.CreateOption(Symbols.AAPL, Market.USA, Symbols.AAPL.SecurityType.DefaultOptionStyle(), OptionRight.Call, 200m, new DateTime(2025, 07, 03)), Resolution.Tick, false),
+                    new TestCaseData(Symbol.CreateOption(Symbols.SPX, Symbols.SPX.ID.Market, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 6195, new DateTime(2025, 08, 07)), Resolution.Tick, false),
+                    new TestCaseData(Symbol.CreateOption(Symbols.SPX, Symbols.SPX.ID.Market, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 6195, new DateTime(2025, 08, 07)), Resolution.Minute, false),
+                    new TestCaseData(Symbol.CreateOption(Symbols.SPX, Symbols.SPX.ID.Market, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 6195, new DateTime(2025, 08, 07)), Resolution.Second, false),
+                    new TestCaseData(Symbol.CreateOption(Symbols.SPX, "SPXW", Symbols.SPX.ID.Market, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 5935m, new DateTime(2025, 08, 07)), Resolution.Second, false)
+            };
             }
         }
 
@@ -62,7 +68,8 @@ namespace QuantConnect.Tests.Brokerages.Tradier
             {
                 ProcessFeed(tradier.Subscribe(config, (s, e) => { }),
                     cancelationToken,
-                    (baseData) => {
+                    (baseData) =>
+                    {
                         if (baseData != null) { Log.Trace($"{baseData}"); }
                     });
             }

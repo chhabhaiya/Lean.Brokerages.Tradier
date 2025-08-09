@@ -39,7 +39,7 @@ namespace QuantConnect.Brokerages.Tradier
 
         private const string WebSocketUrl = "wss://ws.tradier.com/v1/markets/events";
 
-        private object _streamSessionLock = new ();
+        private object _streamSessionLock = new();
         private TradierStreamSession _streamSession;
 
         private readonly ConcurrentDictionary<string, Symbol> _subscribedTickers = new ConcurrentDictionary<string, Symbol>();
@@ -103,8 +103,7 @@ namespace QuantConnect.Brokerages.Tradier
 
         private bool CanSubscribe(Symbol symbol)
         {
-            return (symbol.ID.SecurityType == SecurityType.Equity || symbol.ID.SecurityType == SecurityType.Option
-                || symbol.ID.SecurityType == SecurityType.Index || symbol.ID.SecurityType == SecurityType.IndexOption)
+            return (TradierSymbolMapper.SupportedSecurityTypes.Contains(symbol.ID.SecurityType))
                 && !symbol.Value.Contains("-UNIVERSE-")
                 // continuous futures and canonical symbols not supported
                 && !symbol.IsCanonical();
@@ -174,7 +173,7 @@ namespace QuantConnect.Brokerages.Tradier
         private void SendSubscribeMessage()
         {
             var tickers = _subscribedTickers.Keys.ToList();
-            if(tickers.Count == 0)
+            if (tickers.Count == 0)
             {
                 // Tradier expects at least one symbol
                 tickers = new List<string> { "$empty$" };

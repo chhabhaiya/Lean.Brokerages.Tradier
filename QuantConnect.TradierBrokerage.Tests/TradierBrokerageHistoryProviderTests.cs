@@ -46,10 +46,10 @@ namespace QuantConnect.Tests.Brokerages.Tradier
                 return new[]
                 {
                     // valid parameters
-                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, false, 60 * 6 * 2, TickType.Trade, -1),
-                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, false, 30, TickType.Trade, -1),
-                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, true, 60 * 6 * 2, TickType.Trade, -1),
-                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, true, 30, TickType.Trade, -1),
+                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, false, 60 * 6 * 2, TickType.Trade, -1).SetDescription("Not support Tick Resolution"),
+                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, false, 30, TickType.Trade, -1).SetDescription("Not support Tick Resolution"),
+                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, true, 60 * 6 * 2, TickType.Trade, -1).SetDescription("Not support Tick Resolution"),
+                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, true, 30, TickType.Trade, -1).SetDescription("Not support Tick Resolution"),
 
                     new TestCaseData(Symbols.AAPL, Resolution.Second, false, false, 60 * 6 * 10, TickType.Trade, 60 * 6 * 5),
                     new TestCaseData(Symbols.AAPL, Resolution.Second, false, false, 30, TickType.Trade, -1),
@@ -69,7 +69,7 @@ namespace QuantConnect.Tests.Brokerages.Tradier
                     new TestCaseData(Symbols.AAPL, Resolution.Daily, false, false, 60, TickType.Trade, -1),
                     new TestCaseData(Symbols.AAPL, Resolution.Daily, false, false, 6, TickType.Trade, -1),
 
-                    new TestCaseData(Symbols.SPX, Resolution.Tick, false, false, 60 * 6 * 2, TickType.Trade, -1),
+                    new TestCaseData(Symbols.SPX, Resolution.Tick, false, false, 60 * 6 * 2, TickType.Trade, -1).SetDescription("Not support Tick Resolution"),
 
                     // invalid tick type, null result
                     new TestCaseData(Symbols.AAPL, Resolution.Minute, true, false, 0, TickType.Quote, -1),
@@ -111,6 +111,10 @@ namespace QuantConnect.Tests.Brokerages.Tradier
                     new TestCaseData(Symbols.SPX, Resolution.Second, 60 * 10 * 5),
                     new TestCaseData(Symbols.SPX, Resolution.Tick, 30),
 
+                    //SPWX
+                    new TestCaseData(Symbol.CreateCanonicalOption(Symbols.SPX, "SPXW", Market.USA, "?SPXW"), Resolution.Minute, 60),
+                    new TestCaseData(Symbol.CreateCanonicalOption(Symbols.SPX, "SPXW", Market.USA, "?SPXW"), Resolution.Hour, 18),
+
                     // XSP
                     new TestCaseData(Symbol.Create("XSP", SecurityType.Index, Market.USA), Resolution.Daily, 20),
                     new TestCaseData(Symbol.Create("XSP", SecurityType.Index, Market.USA), Resolution.Hour, 30),
@@ -146,7 +150,7 @@ namespace QuantConnect.Tests.Brokerages.Tradier
             if (_useSandbox && (resolution == Resolution.Tick || resolution == Resolution.Second))
             {
                 // sandbox doesn't allow tick data, we generate second resolution from tick
-                return;
+                Assert.Fail("sandbox doesn't allow tick data or Second data resolution");
             }
             var mhdb = MarketHoursDatabase.FromDataFolder().GetEntry(symbol.ID.Market, symbol, symbol.SecurityType);
 
@@ -191,9 +195,9 @@ namespace QuantConnect.Tests.Brokerages.Tradier
             if (_useSandbox && (resolution == Resolution.Tick || resolution == Resolution.Second))
             {
                 // sandbox doesn't allow tick data, we generate second resolution from tick
-                return;
+                Assert.Fail("sandbox doesn't allow tick data or Second data resolution");
             }
-            
+
             var mhdb = MarketHoursDatabase.FromDataFolder().GetEntry(symbol.ID.Market, symbol, symbol.SecurityType);
 
             GetStartEndTime(mhdb, resolution, expectedCount, false, out var startUtc, out var endUtc);
@@ -204,7 +208,7 @@ namespace QuantConnect.Tests.Brokerages.Tradier
             if (quote == 0)
             {
                 // didn't receive proper quote price
-                return;
+                Assert.Fail("No history returned!");
             }
             var option = chain.Where(x => x.ID.OptionRight == OptionRight.Call)
                 // drop weeklies

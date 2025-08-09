@@ -36,7 +36,7 @@ namespace QuantConnect.Brokerages.Tradier
         /// <returns>Enumerable of Symbols, that are associated with the provided Symbol</returns>
         public IEnumerable<Symbol> LookupSymbols(Symbol symbol, bool includeExpired, string securityCurrency = null)
         {
-            if (symbol.SecurityType != SecurityType.Option && symbol.SecurityType != SecurityType.IndexOption)
+            if (!TradierSymbolMapper.SupportedOptionTypes.Contains(symbol.SecurityType))
             {
                 return Enumerable.Empty<Symbol>();
             }

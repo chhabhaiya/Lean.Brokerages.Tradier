@@ -14,6 +14,7 @@
 */
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace QuantConnect.Brokerages.Tradier
@@ -30,7 +31,7 @@ namespace QuantConnect.Brokerages.Tradier
         /// <returns>The Tradier symbol</returns>
         public string GetBrokerageSymbol(Symbol symbol)
         {
-            return symbol.SecurityType == SecurityType.Option || symbol.SecurityType == SecurityType.IndexOption
+            return SupportedOptionTypes.Contains(symbol.SecurityType)
                 ? symbol.Value.Replace(" ", "")
                 : symbol.Value;
         }
@@ -65,28 +66,24 @@ namespace QuantConnect.Brokerages.Tradier
         /// <returns>A new Lean Symbol instance</returns>
         public Symbol GetLeanSymbol(string brokerageSymbol)
         {
-            Symbol symbol;
             if (brokerageSymbol.Length > 15)
             {
                 // convert the Tradier option symbol to OSI format
                 var underlying = brokerageSymbol.Substring(0, brokerageSymbol.Length - 15);
                 var ticker = underlying.PadRight(6, ' ') + brokerageSymbol.Substring(underlying.Length);
 
-                if (AvailableIndexList.Contains(underlying))
-                    symbol = SymbolRepresentation.ParseOptionTickerOSI(ticker, SecurityType.IndexOption, SecurityType.IndexOption.DefaultOptionStyle(), Market.USA);
-                else
-                    symbol = SymbolRepresentation.ParseOptionTickerOSI(ticker);
+                var securityType = AvailableIndexList.Contains(underlying) ? SecurityType.IndexOption : SecurityType.Option;
+
+                return SymbolRepresentation.ParseOptionTickerOSI(ticker, securityType, securityType.DefaultOptionStyle(), Market.USA);
             }
             else if (AvailableIndexList.Contains(brokerageSymbol))
             {
-                symbol = Symbol.Create(brokerageSymbol, SecurityType.Index, Market.USA);
+                return Symbol.Create(brokerageSymbol, SecurityType.Index, Market.USA);
             }
             else
             {
-                symbol = Symbol.Create(brokerageSymbol, SecurityType.Equity, Market.USA);
+                return Symbol.Create(brokerageSymbol, SecurityType.Equity, Market.USA);
             }
-
-            return symbol;
         }
 
         /// <summary>
@@ -94,5 +91,15 @@ namespace QuantConnect.Brokerages.Tradier
         /// Reason: Tradier doesn't provide security type with the symbol!
         /// </summary>
         private static string[] AvailableIndexList = ["SPX", "NDX", "VIX", "SPXW", "NQX", "VIXW", "RUT", "BKX", "BXD", "BXM", "BXN", "BXR", "CLL", "COR1M", "COR1Y", "COR30D", "COR3M", "COR6M", "COR9M", "DJX", "DUX", "DVS", "DXL", "EVZ", "FVX", "GVZ", "HGX", "MID", "MIDG", "MIDV", "MRUT", "NYA", "NYFANG", "NYXBT", "OEX", "OSX", "OVX", "XDA", "XDB", "XEO", "XMI", "XNDX", "XSP", "BRR", "BRTI", "CEX", "COMP", "DJCIAGC", "DJCICC", "DJCIGC", "DJCIGR", "DJCIIK", "DJCIKC", "DJCISB", "DJCISI", "DJR", "DRG", "PUT", "RUA", "RUI", "RVX", "SET", "SGX", "SKEW", "SPSIBI", "SVX", "TNX", "TYX", "UKX", "UTY", "VIF", "VIN", "VIX1D", "VIX1Y", "VIX3M", "VIX6M", "VIX9D", "VOLI", "VPD", "VPN", "VVIX", "VWA", "VWB", "VXD", "VXN", "VXO", "VXSLV", "VXTH", "VXTLT", "XAU", "DJI", "DWCPF", "UTIL", "DAX", "DXY", "RLS", "SMLG", "SPGSCI", "VAF", "VRO", "AEX", "DJINET", "DTX", "SP600", "SPSV", "FTW5000", "DWCF", "HSI", "N225", "SX5E", "DAX", "RUTW", "NDXP"];
+
+        public static List<SecurityType> SupportedSecurityTypes = new List<SecurityType>()
+        {
+            SecurityType.Equity,
+            SecurityType.Option,
+            SecurityType.Index,
+            SecurityType.IndexOption
+        };
+
+        public static List<SecurityType> SupportedOptionTypes = new List<SecurityType>() { SecurityType.Option, SecurityType.IndexOption };
     }
 }
