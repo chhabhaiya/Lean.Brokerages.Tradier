@@ -662,6 +662,19 @@ Interval	Data Available (Open)	Data Available (All)
         }
 
         /// <summary>
+        /// Get all options symbols for the given underlying.
+        /// </summary>
+        /// <param name="underlying">Underlying symbol of the chain</param>
+        /// <returns>Options lookup results</returns>
+        public TradierOptionsLookupResult GetOptionsLookup(string underlying)
+        {
+            var request = new RestRequest("markets/options/lookup", Method.GET);
+            request.AddParameter("underlying", underlying, ParameterType.QueryString);
+            var optionsContainer = Execute<List<TradierOptionsLookupResult>>(request, TradierApiRequestType.Data, "symbols");
+            return optionsContainer != null ? optionsContainer.FirstOrDefault() : new TradierOptionsLookupResult();
+        }
+
+        /// <summary>
         /// Convert the C# Enums back to the Tradier API Equivalent:
         /// </summary>
         private string GetEnumDescription(Enum value)

@@ -46,10 +46,10 @@ namespace QuantConnect.Tests.Brokerages.Tradier
                 return new[]
                 {
                     // valid parameters
-                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, false, 60 * 6 * 2, TickType.Trade, -1).SetDescription("Not support Tick Resolution"),
-                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, false, 30, TickType.Trade, -1).SetDescription("Not support Tick Resolution"),
-                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, true, 60 * 6 * 2, TickType.Trade, -1).SetDescription("Not support Tick Resolution"),
-                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, true, 30, TickType.Trade, -1).SetDescription("Not support Tick Resolution"),
+                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, false, 60 * 6 * 2, TickType.Trade, -1),
+                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, false, 30, TickType.Trade, -1),
+                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, true, 60 * 6 * 2, TickType.Trade, -1),
+                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false, true, 30, TickType.Trade, -1),
 
                     new TestCaseData(Symbols.AAPL, Resolution.Second, false, false, 60 * 6 * 10, TickType.Trade, 60 * 6 * 5),
                     new TestCaseData(Symbols.AAPL, Resolution.Second, false, false, 30, TickType.Trade, -1),
@@ -69,7 +69,7 @@ namespace QuantConnect.Tests.Brokerages.Tradier
                     new TestCaseData(Symbols.AAPL, Resolution.Daily, false, false, 60, TickType.Trade, -1),
                     new TestCaseData(Symbols.AAPL, Resolution.Daily, false, false, 6, TickType.Trade, -1),
 
-                    new TestCaseData(Symbols.SPX, Resolution.Tick, false, false, 60 * 6 * 2, TickType.Trade, -1).SetDescription("Not support Tick Resolution"),
+                    new TestCaseData(Symbols.SPX, Resolution.Tick, false, false, 60 * 6 * 2, TickType.Trade, -1),
 
                     // invalid tick type, null result
                     new TestCaseData(Symbols.AAPL, Resolution.Minute, true, false, 0, TickType.Quote, -1),
@@ -121,6 +121,34 @@ namespace QuantConnect.Tests.Brokerages.Tradier
                     new TestCaseData(Symbol.Create("XSP", SecurityType.Index, Market.USA), Resolution.Minute, 60 * 10),
                     new TestCaseData(Symbol.Create("XSP", SecurityType.Index, Market.USA), Resolution.Second, 60 * 10 * 5),
                     new TestCaseData(Symbol.Create("XSP", SecurityType.Index, Market.USA), Resolution.Tick, 30),
+
+                    // QQQ Options (ETF Options)
+                    new TestCaseData(Symbol.CreateCanonicalOption(Symbol.Create("QQQ", SecurityType.Equity, Market.USA)), Resolution.Daily, 20),
+                    new TestCaseData(Symbol.CreateCanonicalOption(Symbol.Create("QQQ", SecurityType.Equity, Market.USA)), Resolution.Hour, 30),
+                    new TestCaseData(Symbol.CreateCanonicalOption(Symbol.Create("QQQ", SecurityType.Equity, Market.USA)), Resolution.Minute, 60 * 10),
+
+                    // IWM Options (ETF Options)
+                    new TestCaseData(Symbol.CreateCanonicalOption(Symbol.Create("IWM", SecurityType.Equity, Market.USA)), Resolution.Daily, 20),
+                    new TestCaseData(Symbol.CreateCanonicalOption(Symbol.Create("IWM", SecurityType.Equity, Market.USA)), Resolution.Hour, 30),
+
+                    // BRK.B Options (Equity with dot ticker)
+                    new TestCaseData(Symbol.CreateCanonicalOption(Symbol.Create("BRK.B", SecurityType.Equity, Market.USA)), Resolution.Daily, 10)
+                };
+            }
+        }
+
+        private static TestCaseData[] InvalidOptionTestParameters
+        {
+            get
+            {
+                return new[]
+                {
+                    // Forex symbols should return empty (not supported by LookupSymbols)
+                    new TestCaseData(Symbols.EURUSD, Resolution.Daily, 0),
+                    new TestCaseData(Symbol.Create("GBPUSD", SecurityType.Forex, Market.USA), Resolution.Hour, 0),
+
+                    // Crypto symbols should return empty (not supported by LookupSymbols)
+                    new TestCaseData(Symbol.Create("BTCUSD", SecurityType.Crypto, Market.USA), Resolution.Minute, 0),
                 };
             }
         }
@@ -202,25 +230,40 @@ namespace QuantConnect.Tests.Brokerages.Tradier
 
             GetStartEndTime(mhdb, resolution, expectedCount, false, out var startUtc, out var endUtc);
 
-            var chain = _chainProvider.GetOptionContractList(symbol, startUtc.ConvertFromUtc(mhdb.ExchangeHours.TimeZone)).ToList();
-
-            var quote = _brokerage.GetQuotes(new() { symbol.Value })?.FirstOrDefault()?.Last ?? 0;
+            // Use LookupSymbols as requested by reviewer (now works with canonical option symbols)
+            var chain = _brokerage.LookupSymbols(symbol, includeExpired: false)?.ToList() ?? [];
+            
+            if (chain.Count == 0)
+            {
+                Assert.Fail($"No options found for {symbol.Value}");
+            }
+            // Get quote for the underlying symbol
+            var underlyingSymbol = symbol.Underlying ?? symbol;
+            // Convert dot tickers to brokerage format (slashes) when sending raw strings
+            var mapper = new TradierSymbolMapper();
+            var underlyingTickerForBrokerage = mapper.GetBrokerageSymbol(underlyingSymbol);
+            var quote = _brokerage.GetQuotes(new() { underlyingTickerForBrokerage })?.FirstOrDefault()?.Last ?? 0;
             if (quote == 0)
             {
-                // didn't receive proper quote price
-                Assert.Fail("No history returned!");
+                Assert.Fail($"No quote available for {symbol.Value}. Cannot proceed with option selection.");
             }
-            var option = chain.Where(x => x.ID.OptionRight == OptionRight.Call)
-                // drop weeklies
-                .Where(x => OptionSymbol.IsStandard(x))
-                // not expired
+            // Improved option selection logic
+            var option = chain
+                // Include both standard and weekly options (many liquid options are weeklies)
                 .Where(x => x.ID.Date >= endUtc.ConvertFromUtc(mhdb.ExchangeHours.TimeZone))
-                // closest to expire first
+                // Prefer calls for better liquidity
+                .Where(x => x.ID.OptionRight == OptionRight.Call)
+                // Order by expiration (closest first)
                 .OrderBy(x => x.ID.Date)
-                // most in the money
-                .ThenBy(x => x.ID.StrikePrice)
-                // but not too far in the money
-                .First(x => (x.ID.StrikePrice + quote * 0.01m) > quote);
+                // Then by strike proximity to current price (ATM or slightly ITM)
+                .ThenBy(x => Math.Abs(x.ID.StrikePrice - quote))
+                // Take the first one that should have reasonable liquidity
+                .FirstOrDefault();
+
+            if (option == null)
+            {
+                Assert.Fail($"No suitable options found for {symbol.Value}. Available options: {chain.Count}");
+            }
 
             var request = new HistoryRequest(startUtc,
                 endUtc,
@@ -236,9 +279,20 @@ namespace QuantConnect.Tests.Brokerages.Tradier
                 TickType.Trade);
 
             var count = GetHistoryHelper(request);
-
+            
             // more than X points
             Assert.Greater(count, 15, $"Symbol: {request.Symbol.Value}. Resolution {request.Resolution}");
+        }
+
+        [Test, TestCaseSource(nameof(InvalidOptionTestParameters))]
+        public void LookupSymbolsReturnsEmptyForUnsupportedSymbols(Symbol symbol, Resolution resolution, int expectedCount)
+        {
+            // Test that LookupSymbols correctly returns empty for unsupported symbol types
+            var chain = _brokerage.LookupSymbols(symbol, includeExpired: false)?.ToList() ?? [];
+            
+            // Should return empty for unsupported symbol types
+            Assert.AreEqual(0, chain.Count, 
+                $"LookupSymbols should return empty for {symbol.SecurityType} symbol {symbol.Value}, but returned {chain.Count} options");
         }
 
         private void GetStartEndTime(MarketHoursDatabase.Entry entry, Resolution resolution, int expectedCount,

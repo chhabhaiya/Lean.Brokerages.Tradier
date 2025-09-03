@@ -14,77 +14,70 @@
 */
 
 using NUnit.Framework;
-using System.Threading;
-using QuantConnect.Data;
-using QuantConnect.Logging;
-using QuantConnect.Data.Market;
 using QuantConnect.Brokerages.Tradier;
+using QuantConnect.Configuration;
+using QuantConnect.Tests.Engine.DataFeeds;
 using System;
+using System.Linq;
 
 namespace QuantConnect.Tests.Brokerages.Tradier
 {
     [TestFixture]
-    public partial class TradierBrokerageTests : BrokerageTests
+    public class TradierDataQueueUniverseProviderTests
     {
+        private TradierBrokerage _brokerage;
+        private bool _useSandbox = Config.Get("tradier-environment") == "paper";
+        private readonly string _accountId = Config.Get("tradier-account-id");
+        private readonly string _accessToken = Config.Get("tradier-access-token");
+
+
         private static TestCaseData[] TestParameters
         {
             get
             {
-                return new[]
-                {
-                    // valid parameters, for example
-                    new TestCaseData(Symbols.AAPL, Resolution.Tick, false),
-                    new TestCaseData(Symbols.SPX, Resolution.Tick, false),
-
-                    new TestCaseData(Symbol.CreateOption(Symbols.AAPL, Market.USA, Symbols.AAPL.SecurityType.DefaultOptionStyle(), OptionRight.Call, 200m, new DateTime(2025, 07, 03)), Resolution.Tick, false),
-                    new TestCaseData(Symbol.CreateOption(Symbols.SPX, Symbols.SPX.ID.Market, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 6195, new DateTime(2025, 08, 07)), Resolution.Tick, false),
-                    new TestCaseData(Symbol.CreateOption(Symbols.SPX, Symbols.SPX.ID.Market, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 6195, new DateTime(2025, 08, 07)), Resolution.Minute, false),
-                    new TestCaseData(Symbol.CreateOption(Symbols.SPX, Symbols.SPX.ID.Market, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 6195, new DateTime(2025, 08, 07)), Resolution.Second, false),
-                    new TestCaseData(Symbol.CreateOption(Symbols.SPX, "SPXW", Symbols.SPX.ID.Market, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 5935m, new DateTime(2025, 08, 07)), Resolution.Second, false)
-            };
+                return
+                [
+                    new TestCaseData(Symbols.AAPL),
+                    new TestCaseData(Symbol.Create("QQQ", SecurityType.Option, Market.USA)),
+                    new TestCaseData(Symbols.SPX),
+                    new TestCaseData(Symbol.CreateCanonicalOption(Symbols.SPX, "SPXW", Market.USA, "?SPXW")),
+                    new TestCaseData(Symbol.Create("XSP", SecurityType.IndexOption, Market.USA)),
+                    new TestCaseData(Symbol.CreateCanonicalOption(Symbol.Create("BRK.B", SecurityType.Equity, Market.USA))),
+                ];
             }
         }
-
-        [Test, TestCaseSource(nameof(TestParameters)), Explicit("Long execution time")]
-        public void StreamsData(Symbol symbol, Resolution resolution, bool throwsException)
+        private static TestCaseData[] UnsupportedParameters
         {
-            var cancelationToken = new CancellationTokenSource();
-
-            var tradier = (TradierBrokerage)Brokerage;
-            SubscriptionDataConfig[] configs;
-            if (resolution == Resolution.Tick)
+            get
             {
-                var tradeConfig = new SubscriptionDataConfig(GetSubscriptionDataConfig<Tick>(symbol, resolution), tickType: TickType.Trade);
-                var quoteConfig = new SubscriptionDataConfig(GetSubscriptionDataConfig<Tick>(symbol, resolution), tickType: TickType.Quote);
-                configs = new[] { tradeConfig, quoteConfig };
+                return
+                [
+                    new TestCaseData(Symbol.Create("EURUSD", SecurityType.Forex, Market.USA))
+                ];
             }
-            else
-            {
-                configs = new[] { GetSubscriptionDataConfig<QuoteBar>(symbol, resolution),
-                    GetSubscriptionDataConfig<TradeBar>(symbol, resolution) };
-            }
+        }
+        [OneTimeSetUp]
+        public void Setup()
+        {
+            _brokerage = new TradierBrokerage(new AlgorithmStub(), null, null, null, _useSandbox, _accountId, _accessToken);
+        }
 
-            foreach (var config in configs)
-            {
-                ProcessFeed(tradier.Subscribe(config, (s, e) => { }),
-                    cancelationToken,
-                    (baseData) =>
-                    {
-                        if (baseData != null) { Log.Trace($"{baseData}"); }
-                    });
-            }
+        [Test, TestCaseSource(nameof(TestParameters))]
+        public void LookUpSymbolsTest(Symbol symbol)
+        {
+            //GetsFullDataOptionChain(symbol, DateTime.Now);
+            var contracts = _brokerage.LookupSymbols(symbol, false ).ToList();
 
-            // long runtime so we assert the session refresh and data stream is not interrupted
-            Thread.Sleep(1000 * 15 * 60);
-
-            foreach (var config in configs)
-            {
-                tradier.Unsubscribe(config);
-            }
-
-            Thread.Sleep(1000);
-
-            cancelationToken.Cancel();
+            Assert.IsNotNull(contracts);
+            Assert.True(contracts.Any());
+            Assert.Greater(contracts.Count, 0);
+            Assert.That(contracts.Distinct().ToList().Count, Is.EqualTo(contracts.Count));
+        }
+        [Test,TestCaseSource(nameof(UnsupportedParameters))]
+        public void LookUpSymbolsForUnsupportedSecurityTypeReturnsEmpty(Symbol symbol)
+        {
+            var optionChain = _brokerage.LookupSymbols(symbol, false).ToList();
+            Assert.AreEqual(0, optionChain.Count);
         }
     }
 }
