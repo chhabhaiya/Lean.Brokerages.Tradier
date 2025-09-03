@@ -483,4 +483,25 @@ namespace QuantConnect.Brokerages.Tradier
             return Time.UnixMillisecondTimeStampToDateTime(unix);
         }
     }
+
+    /// <summary>
+    /// Container for options lookup response
+    /// </summary>
+    public class TradierOptionsLookupContainer
+    {
+        [JsonProperty(PropertyName = "symbols")]
+        public List<TradierOptionsLookupResult> Symbols;
+    }
+
+    /// <summary>
+    /// Options lookup result containing root symbol and options
+    /// </summary>
+    public class TradierOptionsLookupResult
+    {
+        [JsonProperty(PropertyName = "rootSymbol")]
+        public string RootSymbol;
+
+        [JsonProperty(PropertyName = "options")]
+        public List<string> Options;
+    }
 }
