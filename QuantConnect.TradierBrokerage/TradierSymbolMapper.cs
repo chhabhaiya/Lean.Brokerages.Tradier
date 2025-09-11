@@ -24,10 +24,14 @@ namespace QuantConnect.Brokerages.Tradier
     /// </summary>
     public class TradierSymbolMapper : ISymbolMapper
     {
-        public static List<SecurityType> SupportedOptionTypes =[ SecurityType.Option, SecurityType.IndexOption];
+        public static readonly HashSet<SecurityType> SupportedOptionTypes =
+        [
+            SecurityType.Option,
+            SecurityType.IndexOption
+        ];
 
-        public static List<SecurityType> SupportedSecurityTypes = 
-        [            
+        public static readonly HashSet<SecurityType> SupportedSecurityTypes =
+        [
             SecurityType.Equity,
             SecurityType.Option,
             SecurityType.Index,
@@ -41,12 +45,12 @@ namespace QuantConnect.Brokerages.Tradier
         /// <returns>The Tradier symbol</returns>
         public string GetBrokerageSymbol(Symbol symbol)
         {
-            var normalized = symbol.Value.Replace('/', '.');
-            var symbolValue = SupportedOptionTypes.Contains(symbol.SecurityType) ? normalized.Replace(" ", "") : normalized;
-            
-            return SupportedOptionTypes.Contains(symbol.SecurityType) 
-                ? symbolValue.Replace(".", "")  // OCC format for options
-                : ToBrokerageTickerFormat(symbolValue);  // Slash format for equities
+            if (SupportedOptionTypes.Contains(symbol.SecurityType))
+            {
+                // Generate OSI, remove spaces and dots for Tradier
+                return GenerateOptionBrokerageSymbols(symbol).Replace(" ", "").Replace(".", "");
+            }
+            return ToBrokerageTickerFormat(symbol.Value);  // Equities: dot → slash
         }
 
         /// <summary>
@@ -73,6 +77,71 @@ namespace QuantConnect.Brokerages.Tradier
         }
 
         /// <summary>
+        /// Converts a Tradier symbol to a Lean symbol instance
+        /// </summary>
+        /// <param name="brokerageSymbol">The Tradier symbol</param>
+        /// <param name="underlyingBrokerageSymbol">Optional underlying brokerage symbol for perfect bidirectional mapping</param>
+        /// <returns>A new Lean Symbol instance</returns>
+        public Symbol GetLeanSymbol(string brokerageSymbol, string underlyingBrokerageSymbol = null)
+        {
+            if (brokerageSymbol.Length > 15)
+            {
+                // Determine security type first
+                var underlying = brokerageSymbol.Substring(0, brokerageSymbol.Length - 15);
+                var securityType = Securities.IndexOption.IndexOptionSymbol.IsIndexOption(underlying) ? SecurityType.IndexOption : SecurityType.Option;
+
+                switch (securityType)
+                {
+                    case SecurityType.IndexOption:
+                        // Use OSI parsing for IndexOptions (works perfectly)
+                        var ticker = underlying.PadRight(6, ' ') + brokerageSymbol.Substring(underlying.Length);
+                        return SymbolRepresentation.ParseOptionTickerOSI(ticker, securityType, securityType.DefaultOptionStyle(), Market.USA);
+
+                    case SecurityType.Option:
+                        // Manual creation for Options (like BRK.B options)
+                        if (!SymbolRepresentation.TryDecomposeOptionTickerOSI(brokerageSymbol, out var optionTicker, out var expiration, out var right, out var strike))
+                        {
+                            throw new NotSupportedException($"Unsupported option symbol '{brokerageSymbol}': Could not parse as OSI format");
+                        }
+
+                        var originalUnderlying = !string.IsNullOrEmpty(underlyingBrokerageSymbol) 
+                            ? FromBrokerageTickerFormat(underlyingBrokerageSymbol) 
+                            : optionTicker;
+                        
+                        var underlyingSymbol = Symbol.Create(originalUnderlying, SecurityType.Equity, Market.USA);
+
+                        return Symbol.CreateOption(underlyingSymbol, originalUnderlying, Market.USA, 
+                            securityType.DefaultOptionStyle(), right, strike, expiration);
+
+                    default:
+                        throw new NotSupportedException($"Unsupported security type for option symbol '{brokerageSymbol}'");
+                }
+            }
+
+            if (Securities.IndexOption.IndexOptionSymbol.IsIndexOption(brokerageSymbol))
+            {
+                return Symbol.Create(brokerageSymbol, SecurityType.Index, Market.USA);
+            }
+
+            return Symbol.Create(FromBrokerageTickerFormat(brokerageSymbol), SecurityType.Equity, Market.USA);
+        }
+
+        /// <summary>
+        /// Generates the brokerage symbol for an option.
+        /// </summary>
+        /// <param name="symbol">The option symbol to generate the brokerage symbol for.</param>
+        /// <returns>The brokerage symbol for the option.</returns>
+        private static string GenerateOptionBrokerageSymbols(Symbol symbol)
+        {
+            var underlyingRoot = symbol.Canonical.Value.Replace("?", string.Empty);
+            return SymbolRepresentation.GenerateOptionTickerOSICompact(
+                underlyingRoot,
+                symbol.ID.OptionRight,
+                symbol.ID.StrikePrice,
+                symbol.ID.Date);
+        }
+        
+        /// <summary>
         /// Normalizes a brokerage-formatted equity/index ticker to Lean format by replacing slashes ('/') with periods ('.').
         /// Example: "BRK/B" -> "BRK.B". Use when converting symbols received from Tradier back into Lean.
         /// </summary>
@@ -88,68 +157,5 @@ namespace QuantConnect.Brokerages.Tradier
         /// <param name="leanTicker">Lean ticker (e.g., "BRK.B").</param>
         /// <returns>Brokerage-compatible ticker (e.g., "BRK/B").</returns>
         private static string ToBrokerageTickerFormat(string leanTicker) => leanTicker.Replace('.', '/');
-
-        /// <summary>
-        /// Converts a Tradier symbol to a Lean symbol instance
-        /// </summary>
-        /// <param name="brokerageSymbol">The Tradier symbol</param>
-        /// <param name="underlyingBrokerageSymbol">Optional underlying brokerage symbol for perfect bidirectional mapping</param>
-        /// <returns>A new Lean Symbol instance</returns>
-        public Symbol GetLeanSymbol(string brokerageSymbol, string underlyingBrokerageSymbol = null)
-        {
-            if (brokerageSymbol.Length > 15)
-            {
-                // Determine security type first
-                var underlying = brokerageSymbol.Substring(0, brokerageSymbol.Length - 15);
-                var securityType = IsIndexOptionSymbol(underlying) ? SecurityType.IndexOption : SecurityType.Option;
-
-                switch (securityType)
-                {
-                    case SecurityType.IndexOption:
-                        // Use OSI parsing for IndexOptions (works perfectly)
-                        var ticker = underlying.PadRight(6, ' ') + brokerageSymbol.Substring(underlying.Length);
-                        return SymbolRepresentation.ParseOptionTickerOSI(ticker, securityType, securityType.DefaultOptionStyle(), Market.USA);
-                    
-                    case SecurityType.Option:
-                        // Manual creation for Options (like BRK.B options)
-                        if (!SymbolRepresentation.TryDecomposeOptionTickerOSI(brokerageSymbol, out var optionTicker, out var expiration, out var right, out var strike))
-                            throw new NotSupportedException($"Unsupported option symbol '{brokerageSymbol}': Could not parse as OSI format");
-
-                        var originalUnderlying = !string.IsNullOrEmpty(underlyingBrokerageSymbol) 
-                            ? FromBrokerageTickerFormat(underlyingBrokerageSymbol) 
-                            : optionTicker;
-                        
-                        var underlyingSymbol = Symbol.Create(originalUnderlying, SecurityType.Equity, Market.USA);
-                        
-                        return Symbol.CreateOption(underlyingSymbol, originalUnderlying, Market.USA, 
-                            securityType.DefaultOptionStyle(), right, strike, expiration);
-                    
-                    default:
-                        throw new NotSupportedException($"Unsupported security type for option symbol '{brokerageSymbol}'");
-                }
-            }
-            
-            if (IsIndexOptionSymbol(brokerageSymbol))
-                return Symbol.Create(brokerageSymbol, SecurityType.Index, Market.USA);
-            
-            return Symbol.Create(FromBrokerageTickerFormat(brokerageSymbol), SecurityType.Equity, Market.USA);
-        }
-
-
-        /// <summary>
-        /// Checks if a symbol is an index option using Lean's method first, then falling back to AvailableIndexList
-        /// Need to add this because IsIndexOption() method doesn't recognize all Tradier index symbols
-        /// </summary>
-        private static bool IsIndexOptionSymbol(string symbol)
-        {
-            // First try Lean's built-in method
-            if (Securities.IndexOption.IndexOptionSymbol.IsIndexOption(symbol))
-                return true;
-            
-            // Fallback using Tradier-specific index symbols that might not be recognized by Lean
-            return AvailableIndexList.Contains(symbol);
-        }
-        
-        private static string[] AvailableIndexList = ["SPX", "NDX", "VIX", "SPXW", "NQX", "VIXW", "RUT", "BKX", "BXD", "BXM", "BXN", "BXR", "CLL", "COR1M", "COR1Y", "COR30D", "COR3M", "COR6M", "COR9M", "DJX", "DUX", "DVS", "DXL", "EVZ", "FVX", "GVZ", "HGX", "MID", "MIDG", "MIDV", "MRUT", "NYA", "NYFANG", "NYXBT", "OEX", "OSX", "OVX", "XDA", "XDB", "XEO", "XMI", "XNDX", "XSP", "BRR", "BRTI", "CEX", "COMP", "DJCIAGC", "DJCICC", "DJCIGC", "DJCIGR", "DJCIIK", "DJCIKC", "DJCISB", "DJCISI", "DJR", "DRG", "PUT", "RUA", "RUI", "RVX", "SET", "SGX", "SKEW", "SPSIBI", "SVX", "TNX", "TYX", "UKX", "UTY", "VIF", "VIN", "VIX1D", "VIX1Y", "VIX3M", "VIX6M", "VIX9D", "VOLI", "VPD", "VPN", "VVIX", "VWA", "VWB", "VXD", "VXN", "VXO", "VXSLV", "VXTH", "VXTLT", "XAU", "DJI", "DWCPF", "UTIL", "DAX", "DXY", "RLS", "SMLG", "SPGSCI", "VAF", "VRO", "AEX", "DJINET", "DTX", "SP600", "SPSV", "FTW5000", "DWCF", "HSI", "N225", "SX5E", "DAX", "RUTW", "NDXP"];
     }
 }

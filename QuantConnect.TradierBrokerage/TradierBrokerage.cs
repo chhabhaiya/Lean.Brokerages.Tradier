@@ -666,7 +666,7 @@ Interval	Data Available (Open)	Data Available (All)
         /// </summary>
         /// <param name="underlying">Underlying symbol of the chain</param>
         /// <returns>Options lookup results</returns>
-        public TradierOptionsLookupResult GetOptionsLookup(string underlying)
+        private TradierOptionsLookupResult GetOptionsLookup(string underlying)
         {
             var request = new RestRequest("markets/options/lookup", Method.GET);
             request.AddParameter("underlying", underlying, ParameterType.QueryString);

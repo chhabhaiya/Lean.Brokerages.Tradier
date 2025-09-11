@@ -35,17 +35,27 @@ namespace QuantConnect.Tests.Brokerages.Tradier
         {
             get
             {
-                return new[]
-                {
-                    new TestCaseData(Symbols.AAPL, 0).SetDescription("Cannot get lookup symbols for Equity symbols"),
-                    new TestCaseData(Symbol.Create("QQQ", SecurityType.Option, Market.USA), 0).SetDescription("To fetch contracts we need OptionChainProvider, that is not possible with AlgorithmStub"),
-                    new TestCaseData(Symbols.SPX, 0).SetDescription("To fetch contracts we need OptionChainProvider, that is not possible with AlgorithmStub"),
-                    new TestCaseData(Symbol.CreateCanonicalOption(Symbols.SPX, "SPXW", Market.USA, "?SPXW"), 0).SetDescription("To fetch contracts we need OptionChainProvider, that is not possible with AlgorithmStub"),
-                    new TestCaseData(Symbol.Create("XSP", SecurityType.IndexOption, Market.USA), 0).SetDescription("To fetch contracts we need OptionChainProvider, that is not possible with AlgorithmStub")
-                };
+                return
+                [
+                    new TestCaseData(Symbols.AAPL),
+                    new TestCaseData(Symbol.Create("QQQ", SecurityType.Option, Market.USA)),
+                    new TestCaseData(Symbols.SPX),
+                    new TestCaseData(Symbol.CreateCanonicalOption(Symbols.SPX, "SPXW", Market.USA, "?SPXW")),
+                    new TestCaseData(Symbol.Create("XSP", SecurityType.IndexOption, Market.USA)),
+                    new TestCaseData(Symbol.CreateCanonicalOption(Symbol.Create("BRK.B", SecurityType.Equity, Market.USA))),
+                ];
             }
         }
-
+        private static TestCaseData[] UnsupportedParameters
+        {
+            get
+            {
+                return
+                [
+                    new TestCaseData(Symbol.Create("EURUSD", SecurityType.Forex, Market.USA))
+                ];
+            }
+        }
         [OneTimeSetUp]
         public void Setup()
         {
@@ -53,12 +63,21 @@ namespace QuantConnect.Tests.Brokerages.Tradier
         }
 
         [Test, TestCaseSource(nameof(TestParameters))]
-        public void LookUpSymbolsTest(Symbol symbol, int compareResponseCount)
+        public void LookUpSymbolsTest(Symbol symbol)
         {
             //GetsFullDataOptionChain(symbol, DateTime.Now);
-            var contracts = _brokerage.LookupSymbols(symbol, false, null);
+            var contracts = _brokerage.LookupSymbols(symbol, false).ToList();
 
-            Assert.AreEqual(contracts.Count(), compareResponseCount);
+            Assert.IsNotNull(contracts);
+            Assert.True(contracts.Any());
+            Assert.Greater(contracts.Count, 0);
+            Assert.That(contracts.Distinct().ToList().Count, Is.EqualTo(contracts.Count));
+        }
+        [Test, TestCaseSource(nameof(UnsupportedParameters))]
+        public void LookUpSymbolsForUnsupportedSecurityTypeReturnsEmpty(Symbol symbol)
+        {
+            var optionChain = _brokerage.LookupSymbols(symbol, false).ToList();
+            Assert.AreEqual(0, optionChain.Count);
         }
     }
 }

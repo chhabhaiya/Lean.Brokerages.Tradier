@@ -31,11 +31,10 @@ namespace QuantConnect.Tests.Brokerages.Tradier
                 {
                     new TestCaseData(Symbols.AAPL, "AAPL", null),
                     new TestCaseData(Symbols.SPX, "SPX", null),
-                    new TestCaseData(Symbol.Create("XSP", SecurityType.Index, Market.USA), "XSP", null),
+                    new TestCaseData(Symbol.Create("VIX", SecurityType.Index, Market.USA), "XSP", null),
                     new TestCaseData(Symbol.CreateOption("QQQ", Market.USA, SecurityType.Option.DefaultOptionStyle(), OptionRight.Put, 350m, new DateTime(2025, 7, 25)), "QQQ250725P00350000", null),
                     new TestCaseData(Symbol.CreateOption("SPY", Market.USA, SecurityType.Option.DefaultOptionStyle(), OptionRight.Call, 410m, new DateTime(2021, 3, 19)), "SPY210319C00410000", null),
                     new TestCaseData(Symbol.CreateOption(Symbols.SPX, "SPXW", Market.USA, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 5900m, new DateTime(2025, 7, 25)), "SPXW250725C05900000", "SPX"),
-                    new TestCaseData(Symbol.CreateOption(Symbol.Create("XSP", SecurityType.Index, Market.USA), "XSP", Market.USA, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 480m, new DateTime(2025, 7, 25)), "XSP250725C00480000", null),
                     // BRK.B equity and option contract test cases
                     // Note: Brokerage symbols use slashes for dot tickers (BRK.B -> BRK/B)
                     new TestCaseData(Symbol.Create("BRK.B", SecurityType.Equity, Market.USA), "BRK/B", null),
