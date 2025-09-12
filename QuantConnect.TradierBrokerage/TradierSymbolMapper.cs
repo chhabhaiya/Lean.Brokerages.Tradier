@@ -13,7 +13,10 @@
  * limitations under the License.
 */
 
+using QuantConnect.Configuration;
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -24,19 +27,26 @@ namespace QuantConnect.Brokerages.Tradier
     /// </summary>
     public class TradierSymbolMapper : ISymbolMapper
     {
-        public static readonly HashSet<SecurityType> SupportedOptionTypes =
+        private TradierBrokerage _brokerage;
+        private bool _useSandbox = Config.GetBool("tradier-use-sandbox");
+        private readonly string _accountId = Config.Get("tradier-account-id");
+        private readonly string _accessToken = Config.Get("tradier-access-token");
+
+        public static readonly FrozenSet<SecurityType> SupportedOptionTypes =
         [
             SecurityType.Option,
             SecurityType.IndexOption
         ];
 
-        public static readonly HashSet<SecurityType> SupportedSecurityTypes =
+        public static readonly FrozenSet<SecurityType> SupportedSecurityTypes =
         [
             SecurityType.Equity,
             SecurityType.Option,
             SecurityType.Index,
             SecurityType.IndexOption
         ];
+
+        private static readonly ConcurrentDictionary<string, string> _leanUnderlyingSymbol = [];
 
         /// <summary>
         /// Converts a Lean symbol instance to a Tradier symbol
@@ -45,12 +55,19 @@ namespace QuantConnect.Brokerages.Tradier
         /// <returns>The Tradier symbol</returns>
         public string GetBrokerageSymbol(Symbol symbol)
         {
-            if (SupportedOptionTypes.Contains(symbol.SecurityType))
+            switch (symbol.SecurityType)
             {
-                // Generate OSI, remove spaces and dots for Tradier
-                return GenerateOptionBrokerageSymbols(symbol).Replace(" ", "").Replace(".", "");
+                case SecurityType.Option:
+                case SecurityType.IndexOption:
+                    return GenerateOptionBrokerageSymbols(symbol);
+                
+                case SecurityType.Equity:
+                case SecurityType.Index:
+                    return ToBrokerageTickerFormat(symbol.Value);
+                
+                default:
+                    throw new NotSupportedException($"Unsupported security type: {symbol.SecurityType}");
             }
-            return ToBrokerageTickerFormat(symbol.Value);  // Equities: dot → slash
         }
 
         /// <summary>
@@ -82,7 +99,7 @@ namespace QuantConnect.Brokerages.Tradier
         /// <param name="brokerageSymbol">The Tradier symbol</param>
         /// <param name="underlyingBrokerageSymbol">Optional underlying brokerage symbol for perfect bidirectional mapping</param>
         /// <returns>A new Lean Symbol instance</returns>
-        public Symbol GetLeanSymbol(string brokerageSymbol, string underlyingBrokerageSymbol = null)
+        public Symbol GetLeanSymbol(string brokerageSymbol)
         {
             if (brokerageSymbol.Length > 15)
             {
@@ -103,9 +120,9 @@ namespace QuantConnect.Brokerages.Tradier
                         {
                             throw new NotSupportedException($"Unsupported option symbol '{brokerageSymbol}': Could not parse as OSI format");
                         }
-
+                        var underlyingBrokerageSymbol = GetUnderlyingBrokerageSymbol(brokerageSymbol,optionTicker);
                         var originalUnderlying = !string.IsNullOrEmpty(underlyingBrokerageSymbol) 
-                            ? FromBrokerageTickerFormat(underlyingBrokerageSymbol) 
+                            ? ToLeanTickerFormat(underlyingBrokerageSymbol) 
                             : optionTicker;
                         
                         var underlyingSymbol = Symbol.Create(originalUnderlying, SecurityType.Equity, Market.USA);
@@ -123,7 +140,7 @@ namespace QuantConnect.Brokerages.Tradier
                 return Symbol.Create(brokerageSymbol, SecurityType.Index, Market.USA);
             }
 
-            return Symbol.Create(FromBrokerageTickerFormat(brokerageSymbol), SecurityType.Equity, Market.USA);
+            return Symbol.Create(ToLeanTickerFormat(brokerageSymbol), SecurityType.Equity, Market.USA);
         }
 
         /// <summary>
@@ -133,21 +150,35 @@ namespace QuantConnect.Brokerages.Tradier
         /// <returns>The brokerage symbol for the option.</returns>
         private static string GenerateOptionBrokerageSymbols(Symbol symbol)
         {
-            var underlyingRoot = symbol.Canonical.Value.Replace("?", string.Empty);
             return SymbolRepresentation.GenerateOptionTickerOSICompact(
-                underlyingRoot,
+                symbol.ID.Symbol,
                 symbol.ID.OptionRight,
                 symbol.ID.StrikePrice,
-                symbol.ID.Date);
+                symbol.ID.Date).Replace(" ", "").Replace(".", "");
         }
-        
+
+        /// <summary>
+        /// Get the underlying brokerage symbol for an option.
+        /// </summary>
+        /// <param name="brokerageSymbol"></param>
+        /// <param name="optionTicker"></param>
+        /// <returns></returns>
+        private string GetUnderlyingBrokerageSymbol(string brokerageSymbol , string optionTicker)
+        {
+            if (_leanUnderlyingSymbol.TryGetValue(optionTicker, out var cached))
+                return cached;
+            _brokerage = new TradierBrokerage(null, null, null, null, _useSandbox, _accountId, _accessToken);
+            var underlying = _brokerage.GetQuotes(new() { brokerageSymbol })?.FirstOrDefault()?.Options_UnderlyingAsset ?? optionTicker;
+            _leanUnderlyingSymbol.TryAdd(optionTicker, underlying);
+            return underlying;
+        }
         /// <summary>
         /// Normalizes a brokerage-formatted equity/index ticker to Lean format by replacing slashes ('/') with periods ('.').
         /// Example: "BRK/B" -> "BRK.B". Use when converting symbols received from Tradier back into Lean.
         /// </summary>
         /// <param name="brokerageTicker">Ticker received from Tradier (e.g., "BRK/B").</param>
         /// <returns>Lean-compatible ticker (e.g., "BRK.B").</returns>
-        private static string FromBrokerageTickerFormat(string brokerageTicker) => brokerageTicker.Replace('/', '.');
+        private static string ToLeanTickerFormat(string brokerageTicker) => brokerageTicker.Replace('/', '.');
 
 
         /// <summary>

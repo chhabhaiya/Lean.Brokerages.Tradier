@@ -29,16 +29,16 @@ namespace QuantConnect.Tests.Brokerages.Tradier
             {
                 return new[]
                 {
-                    new TestCaseData(Symbols.AAPL, "AAPL", null),
-                    new TestCaseData(Symbols.SPX, "SPX", null),
-                    new TestCaseData(Symbol.Create("VIX", SecurityType.Index, Market.USA), "XSP", null),
-                    new TestCaseData(Symbol.CreateOption("QQQ", Market.USA, SecurityType.Option.DefaultOptionStyle(), OptionRight.Put, 350m, new DateTime(2025, 7, 25)), "QQQ250725P00350000", null),
-                    new TestCaseData(Symbol.CreateOption("SPY", Market.USA, SecurityType.Option.DefaultOptionStyle(), OptionRight.Call, 410m, new DateTime(2021, 3, 19)), "SPY210319C00410000", null),
-                    new TestCaseData(Symbol.CreateOption(Symbols.SPX, "SPXW", Market.USA, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 5900m, new DateTime(2025, 7, 25)), "SPXW250725C05900000", "SPX"),
+                    new TestCaseData(Symbols.AAPL, "AAPL"),
+                    new TestCaseData(Symbols.SPX, "SPX"),
+                    new TestCaseData(Symbol.Create("VIX", SecurityType.Index, Market.USA), "VIX"),
+                    new TestCaseData(Symbol.CreateOption("QQQ", Market.USA, SecurityType.Option.DefaultOptionStyle(), OptionRight.Put, 350m, new DateTime(2025, 7, 25)), "QQQ250725P00350000"),
+                    new TestCaseData(Symbol.CreateOption("SPY", Market.USA, SecurityType.Option.DefaultOptionStyle(), OptionRight.Call, 410m, new DateTime(2021, 3, 19)), "SPY210319C00410000"),
+                    new TestCaseData(Symbol.CreateOption(Symbols.SPX, "SPXW", Market.USA, SecurityType.IndexOption.DefaultOptionStyle(), OptionRight.Call, 5900m, new DateTime(2025, 7, 25)), "SPXW250725C05900000"),
                     // BRK.B equity and option contract test cases
                     // Note: Brokerage symbols use slashes for dot tickers (BRK.B -> BRK/B)
-                    new TestCaseData(Symbol.Create("BRK.B", SecurityType.Equity, Market.USA), "BRK/B", null),
-                    new TestCaseData(Symbol.CreateOption(Symbol.Create("BRK.B", SecurityType.Equity, Market.USA), Market.USA, SecurityType.Option.DefaultOptionStyle(), OptionRight.Call, 190m, new DateTime(2025, 6, 20)), "BRKB250620C00190000", "BRK/B"),
+                    new TestCaseData(Symbol.Create("BRK.B", SecurityType.Equity, Market.USA), "BRK/B"),
+                    new TestCaseData(Symbol.CreateOption(Symbol.Create("BRK.B", SecurityType.Equity, Market.USA), Market.USA, SecurityType.Option.DefaultOptionStyle(), OptionRight.Call, 455.0m , new DateTime(2025, 9, 12)), "BRKB250912C00455000"),                
                 };
             }
         }
@@ -50,13 +50,13 @@ namespace QuantConnect.Tests.Brokerages.Tradier
         }
 
         [Test, TestCaseSource(nameof(TestParameters))]
-        public void ReturnsCorrectLeanSymbol(Symbol expectedLeanSymbol, string brokerSymbol, string underlyingBrokerageSymbol)
+        public void ReturnsCorrectLeanSymbol(Symbol expectedLeanSymbol, string brokerSymbol)
         {
-            Assert.AreEqual(expectedLeanSymbol, _symbolMapper.GetLeanSymbol(brokerSymbol, underlyingBrokerageSymbol));
+            Assert.AreEqual(expectedLeanSymbol, _symbolMapper.GetLeanSymbol(brokerSymbol));
         }
 
         [Test, TestCaseSource(nameof(TestParameters))]
-        public void ReturnsCorrectBrokerageSymbol(Symbol leanSymbol, string expectedBrokerSymbol, string underlyingBrokerageSymbol)
+        public void ReturnsCorrectBrokerageSymbol(Symbol leanSymbol, string expectedBrokerSymbol)
         {
             Assert.AreEqual(expectedBrokerSymbol, _symbolMapper.GetBrokerageSymbol(leanSymbol));
         }

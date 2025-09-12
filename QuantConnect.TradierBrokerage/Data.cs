@@ -194,7 +194,7 @@ namespace QuantConnect.Brokerages.Tradier
 
         ///Option Underlying Asset
         [JsonProperty(PropertyName = "underlying")]
-        private string Options_UnderlyingAsset = "";
+        public string Options_UnderlyingAsset = "";
 
         ///Option Strike Price
         [JsonProperty(PropertyName = "strike")]

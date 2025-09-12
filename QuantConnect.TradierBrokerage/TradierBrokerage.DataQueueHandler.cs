@@ -235,7 +235,10 @@ namespace QuantConnect.Brokerages.Tradier
             if (tsd.Type == "trade")
             {
                 // Occasionally Tradier sends trades with 0 volume?
-                if (tsd.TradeSize == 0 || !tsd.TradePrice.HasValue) return null;
+                if ((tsd.TradeSize == 0 && symbol.SecurityType != SecurityType.Index) || !tsd.TradePrice.HasValue)
+                {
+                    return null;
+                }
             }
 
             // Tradier trades are US NY time only. Convert local server time to NY Time:
